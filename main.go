@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 )
@@ -13,12 +14,22 @@ func main() {
 	}
 	defer file.Close()
 
+	lines := make(chan string)
+	go getLinesChannel(file, lines)
+	for {
+		line := <-lines
+		fmt.Printf("read: %s\n", line)
+	}
+}
+
+func getLinesChannel(file io.ReadCloser, lines chan string) <-chan string {
 	var line string
 	for {
 		byteArray := make([]byte, 8)
 		_, err := file.Read(byteArray)
 		if err != nil {
-			return
+			file.Close()
+			close(lines)
 		}
 		readLine := string(byteArray)
 		if len(strings.Split(readLine, "\n")) == 1 {
@@ -26,7 +37,7 @@ func main() {
 		} else {
 			for index, value := range strings.Split(readLine, "\n") {
 				if index == 0 {
-					fmt.Printf("read: %s\n", line+value)
+					lines <- line + value
 					line = ""
 					continue
 				}
