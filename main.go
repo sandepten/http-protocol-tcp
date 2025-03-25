@@ -1,51 +1,52 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
-	"io"
-	"os"
+	"net"
 	"strings"
 )
 
 func main() {
-	file, err := os.Open("messages.txt")
+	listener, err := net.Listen("tcp", "0.0.0.0:42069")
 	if err != nil {
 		panic(err)
 	}
+	fmt.Println("Listening on 42069")
 
-	lines := getLinesChannel(file)
-	for line := range lines {
-		fmt.Printf("read: %s\n", line)
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			fmt.Println(err)
+		}
+		fmt.Println("Connection Accepted...")
+
+		lines := getLinesChannel(conn)
+		for line := range lines {
+			fmt.Printf("%s\n", line)
+		}
 	}
 }
 
-func getLinesChannel(file io.ReadCloser) <-chan string {
+func getLinesChannel(conn net.Conn) <-chan string {
 	lines := make(chan string)
 
 	go func() {
-		defer file.Close()
-		defer close(lines)
+		reader := bufio.NewReader(conn)
 
-		var line string
 		for {
-			byteArray := make([]byte, 8)
-			_, err := file.Read(byteArray)
+			readLine, err := reader.ReadString('\n')
 			if err != nil {
-				file.Close()
+				conn.Close()
 			}
-			readLine := string(byteArray)
-			if len(strings.Split(readLine, "\n")) == 1 {
-				line = line + readLine
-			} else {
-				for index, value := range strings.Split(readLine, "\n") {
-					if index == 0 {
-						lines <- line + value
-						line = ""
-						continue
-					}
-					line += value
-				}
+			readLine = strings.TrimSpace(readLine)
+			if len(readLine) == 0 {
+				conn.Close()
+				close(lines)
+				fmt.Println("Connection Closed!")
+				break
 			}
+			lines <- readLine
 		}
 	}()
 
