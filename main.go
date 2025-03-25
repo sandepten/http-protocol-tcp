@@ -12,37 +12,42 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	defer file.Close()
 
-	lines := make(chan string)
-	go getLinesChannel(file, lines)
-	for {
-		line := <-lines
+	lines := getLinesChannel(file)
+	for line := range lines {
 		fmt.Printf("read: %s\n", line)
 	}
 }
 
-func getLinesChannel(file io.ReadCloser, lines chan string) <-chan string {
-	var line string
-	for {
-		byteArray := make([]byte, 8)
-		_, err := file.Read(byteArray)
-		if err != nil {
-			file.Close()
-			close(lines)
-		}
-		readLine := string(byteArray)
-		if len(strings.Split(readLine, "\n")) == 1 {
-			line = line + readLine
-		} else {
-			for index, value := range strings.Split(readLine, "\n") {
-				if index == 0 {
-					lines <- line + value
-					line = ""
-					continue
+func getLinesChannel(file io.ReadCloser) <-chan string {
+	lines := make(chan string)
+
+	go func() {
+		defer file.Close()
+		defer close(lines)
+
+		var line string
+		for {
+			byteArray := make([]byte, 8)
+			_, err := file.Read(byteArray)
+			if err != nil {
+				file.Close()
+			}
+			readLine := string(byteArray)
+			if len(strings.Split(readLine, "\n")) == 1 {
+				line = line + readLine
+			} else {
+				for index, value := range strings.Split(readLine, "\n") {
+					if index == 0 {
+						lines <- line + value
+						line = ""
+						continue
+					}
+					line += value
 				}
-				line += value
 			}
 		}
-	}
+	}()
+
+	return lines
 }
